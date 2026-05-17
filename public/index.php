@@ -168,6 +168,16 @@ $router->post('/admin/update-user', function() {
     $controller->handleUpdateUser();
 });
 
+$router->post('/admin/generate-token', function() {
+    $controller = new AdminController();
+    $controller->handleGenerateToken();
+});
+
+$router->post('/admin/revoke-token', function() {
+    $controller = new AdminController();
+    $controller->handleRevokeToken();
+});
+
 $router->post('/admin/update-landing-page', function() {
     $controller = new AdminController();
     $controller->handleUpdateLandingPage();

@@ -75,6 +75,10 @@
                         <input type="checkbox" name="show_format" id="show_format" value="1">
                         <span>File Format</span>
                     </label>
+                    <label id="download_option" style="display: none; align-items: center; gap: 6px; font-weight: normal; cursor: pointer;">
+                        <input type="checkbox" name="show_download" id="show_download" value="1">
+                        <span>Download Button</span>
+                    </label>
                 </div>
             </div>
 
@@ -141,10 +145,12 @@
                 // Load caption into WYSIWYG editor
                 initWysiwygCaption('share', settings.caption || '');
 
-                // Show/hide dimension vs duration based on media type
-                const isAudio = settings.media_type === 'audio';
-                document.getElementById('dimension_option').style.display = isAudio ? 'none' : 'flex';
-                document.getElementById('duration_option').style.display = isAudio ? 'flex' : 'none';
+                // Show/hide dimension vs duration vs download based on media type
+                const isNonImage = settings.media_type === 'audio' || settings.media_type === 'video';
+                const isVideo = settings.media_type === 'video';
+                document.getElementById('dimension_option').style.display = isNonImage ? 'none' : 'flex';
+                document.getElementById('duration_option').style.display = isNonImage ? 'flex' : 'none';
+                document.getElementById('download_option').style.display = isVideo ? 'flex' : 'none';
 
                 // Load display metadata checkboxes
                 if (settings.display_metadata) {
@@ -157,6 +163,7 @@
                     document.getElementById('show_dimensions').checked = metadata.show_dimensions || false;
                     document.getElementById('show_duration').checked = metadata.show_duration || false;
                     document.getElementById('show_format').checked = metadata.show_format || false;
+                    document.getElementById('show_download').checked = metadata.show_download || false;
                 }
 
                 if (settings.expires_at || settings.has_password) {

@@ -170,7 +170,8 @@
                         <div class="metadata-icon">📅</div>
                         <div class="metadata-content">
                             <div class="metadata-label">Uploaded</div>
-                            <div class="metadata-value"><?= date('M j, Y g:i A', strtotime($image['created_at'])) ?></div>
+
+                            <div class="metadata-value"><?= (new DateTime($image['created_at']))->setTimezone(new DateTimeZone(date_default_timezone_get()))->format('M j, Y g:i A T') ?></div>
                         </div>
                     </div>
                 <?php endif; ?>

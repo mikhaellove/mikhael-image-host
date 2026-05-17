@@ -207,7 +207,7 @@
                     <div class="metadata-icon">📅</div>
                     <div class="metadata-content">
                         <div class="metadata-label">Uploaded</div>
-                        <div class="metadata-value"><?= date('M j, Y g:i A', strtotime($image['created_at'])) ?></div>
+                        <div class="metadata-value"><?= date('M j, Y g:i A T', strtotime($image['created_at'])) ?></div>
                     </div>
                 </div>
             <?php endif; ?>

@@ -20,7 +20,7 @@ CREATE TABLE IF NOT EXISTS `images` (
     `user_id` INT UNSIGNED NOT NULL,
     `slug` VARCHAR(12) NOT NULL UNIQUE COLLATE utf8mb4_bin,
     `mime_type` VARCHAR(20) NOT NULL DEFAULT 'image/jpeg',
-    `media_type` ENUM('image', 'audio') NOT NULL DEFAULT 'image',
+    `media_type` ENUM('image', 'audio', 'video') NOT NULL DEFAULT 'image',
     `duration` INT UNSIGNED NULL DEFAULT NULL COMMENT 'Duration in seconds for audio files',
     `file_size` INT UNSIGNED NULL DEFAULT NULL COMMENT 'File size in bytes',
     `image_data` LONGBLOB NULL DEFAULT NULL,

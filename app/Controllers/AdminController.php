@@ -271,6 +271,7 @@ class AdminController
                     'username' => $user['username'],
                     'name' => $user['name'] ?? '',
                     'role' => $user['role'],
+                    'has_token' => !empty($user['api_token']),
                 ],
             ]);
         } catch (\Exception $e) {
@@ -368,6 +369,54 @@ class AdminController
         echo json_encode(['success' => true]);
     }
 
+    public function handleGenerateToken(): void
+    {
+        header('Content-Type: application/json');
+
+        try {
+            AuthMiddleware::requireAdmin();
+            AuthMiddleware::requireCsrf();
+
+            $userId = (int)($_POST['user_id'] ?? 0);
+            if (!User::findById($userId)) {
+                http_response_code(404);
+                echo json_encode(['success' => false, 'error' => 'User not found']);
+                return;
+            }
+
+            $token = User::createApiToken($userId);
+            echo json_encode(['success' => true, 'token' => $token]);
+        } catch (\Exception $e) {
+            http_response_code(500);
+            error_log("Generate token error: " . $e->getMessage());
+            echo json_encode(['success' => false, 'error' => $e->getMessage()]);
+        }
+    }
+
+    public function handleRevokeToken(): void
+    {
+        header('Content-Type: application/json');
+
+        try {
+            AuthMiddleware::requireAdmin();
+            AuthMiddleware::requireCsrf();
+
+            $userId = (int)($_POST['user_id'] ?? 0);
+            if (!User::findById($userId)) {
+                http_response_code(404);
+                echo json_encode(['success' => false, 'error' => 'User not found']);
+                return;
+            }
+
+            User::revokeApiToken($userId);
+            echo json_encode(['success' => true]);
+        } catch (\Exception $e) {
+            http_response_code(500);
+            error_log("Revoke token error: " . $e->getMessage());
+            echo json_encode(['success' => false, 'error' => $e->getMessage()]);
+        }
+    }
+
     public function handleUpdateLandingPage(): void
     {
         AuthMiddleware::requireAdmin();
@@ -462,10 +511,9 @@ class AdminController
                 return;
             }
 
-            // Check if media type is audio (cannot rotate audio)
-            if (Image::isAudio($image)) {
+            if (Image::isAudio($image) || Image::isVideo($image)) {
                 http_response_code(400);
-                echo json_encode(['success' => false, 'error' => 'Cannot rotate audio files']);
+                echo json_encode(['success' => false, 'error' => 'Cannot rotate non-image files']);
                 return;
             }
 
@@ -635,7 +683,8 @@ class AdminController
                 'show_size' => isset($_POST['show_size']),
                 'show_dimensions' => isset($_POST['show_dimensions']),
                 'show_duration' => isset($_POST['show_duration']),
-                'show_format' => isset($_POST['show_format'])
+                'show_format' => isset($_POST['show_format']),
+                'show_download' => isset($_POST['show_download'])
             ];
 
             // Update settings
@@ -676,10 +725,9 @@ class AdminController
                 return;
             }
 
-            // Check if media type is audio (cannot edit audio)
-            if (Image::isAudio($image)) {
+            if (Image::isAudio($image) || Image::isVideo($image)) {
                 http_response_code(400);
-                echo json_encode(['success' => false, 'error' => 'Cannot edit audio files']);
+                echo json_encode(['success' => false, 'error' => 'Cannot edit non-image files']);
                 return;
             }
 

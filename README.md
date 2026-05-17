@@ -30,22 +30,6 @@ A private, security-focused image hosting service acting as a digital vault for 
 
 **No Composer required** - The application uses a custom PSR-4 autoloader with zero external dependencies.
 
-## Configuration
-
-After installation, configure your virtual host to point to the `public/` directory:
-
-```apache
-<VirtualHost *:443>
-    ServerName vault.example.com
-    DocumentRoot /path/to/outcolumbus/public
-
-    <Directory /path/to/outcolumbus/public>
-        AllowOverride All
-        Require all granted
-    </Directory>
-</VirtualHost>
-```
-
 ## Security Notes
 
 - The `/admin` path is not advertised - users must navigate to it manually

@@ -7,7 +7,7 @@ use App\Core\Auth;
 
 class Uploader
 {
-    private const MAX_FILE_SIZE = 104857600; // 100MB sanity limit
+    private const MAX_FILE_SIZE = 262144000; // 250MB sanity limit (video max)
     private const CHUNK_UPLOAD_DIR = '/tmp/vault_chunks/';
 
     public static function handleUpload(int $userId, array $file, ?string $caption = null): array
@@ -19,7 +19,7 @@ class Uploader
 
         // Validate file size
         if ($file['size'] > self::MAX_FILE_SIZE) {
-            throw new \RuntimeException("File exceeds maximum size limit of 100MB");
+            throw new \RuntimeException("File exceeds maximum size limit of 250MB");
         }
 
         if ($file['error'] !== UPLOAD_ERR_OK) {
@@ -32,6 +32,7 @@ class Uploader
         finfo_close($finfo);
 
         $isAudio = strpos($mimeType, 'audio/') === 0;
+        $isVideo = strpos($mimeType, 'video/') === 0;
 
         // Process based on file type
         if ($isAudio) {
@@ -41,7 +42,15 @@ class Uploader
             $fileSize = $processed['file_size'];
             $masterData = $processed['audio_data'];
             $thumbData = $processed['thumbnail'];
-            $metadata = null; // Audio doesn't need EXIF metadata
+            $metadata = null;
+        } elseif ($isVideo) {
+            $processed = VideoProcessor::process($file['tmp_name']);
+            $mediaType = 'video';
+            $duration = $processed['duration'];
+            $fileSize = $processed['file_size'];
+            $masterData = $processed['video_data'];
+            $thumbData = $processed['thumbnail'];
+            $metadata = null;
         } else {
             $processed = ImageProcessor::process($file['tmp_name']);
             $mediaType = 'image';
@@ -130,6 +139,7 @@ class Uploader
         finfo_close($finfo);
 
         $isAudio = strpos($mimeType, 'audio/') === 0;
+        $isVideo = strpos($mimeType, 'video/') === 0;
 
         // Process based on file type
         if ($isAudio) {
@@ -138,6 +148,14 @@ class Uploader
             $duration = $processed['duration'];
             $fileSize = $processed['file_size'];
             $masterData = $processed['audio_data'];
+            $thumbData = $processed['thumbnail'];
+            $metadata = null;
+        } elseif ($isVideo) {
+            $processed = VideoProcessor::process($finalPath);
+            $mediaType = 'video';
+            $duration = $processed['duration'];
+            $fileSize = $processed['file_size'];
+            $masterData = $processed['video_data'];
             $thumbData = $processed['thumbnail'];
             $metadata = null;
         } else {

@@ -143,6 +143,8 @@ class ViewerController
         // Route to appropriate template based on media type
         if (Image::isAudio($image)) {
             include __DIR__ . '/../../templates/viewer/audio.php';
+        } elseif (Image::isVideo($image)) {
+            include __DIR__ . '/../../templates/viewer/video.php';
         } else {
             include __DIR__ . '/../../templates/viewer/image.php';
         }
@@ -166,11 +168,33 @@ class ViewerController
             return;
         }
 
+        $data = $image['image_data'];
+        $totalLength = strlen($data);
+        $start = 0;
+        $end = $totalLength - 1;
+
+        if (isset($_SERVER['HTTP_RANGE'])
+            && preg_match('/bytes=(\d+)-(\d*)/', $_SERVER['HTTP_RANGE'], $m)
+        ) {
+            $start = (int)$m[1];
+            $end = ($m[2] !== '') ? (int)$m[2] : $totalLength - 1;
+
+            if ($start > $end || $start >= $totalLength) {
+                http_response_code(416);
+                header('Content-Range: bytes */' . $totalLength);
+                return;
+            }
+
+            http_response_code(206);
+            header('Content-Range: bytes ' . $start . '-' . $end . '/' . $totalLength);
+        }
+
+        header('Accept-Ranges: bytes');
         header('Content-Type: ' . $image['mime_type']);
-        header('Content-Length: ' . strlen($image['image_data']));
+        header('Content-Length: ' . ($end - $start + 1));
         header('Cache-Control: public, max-age=31536000');
 
-        echo $image['image_data'];
+        echo substr($data, $start, $end - $start + 1);
     }
 
     public function serveThumbnail(string $slug): void

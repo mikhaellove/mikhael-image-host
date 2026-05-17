@@ -441,19 +441,18 @@ class Image
         }
     }
 
-    /**
-     * Check if media item is an image
-     */
     public static function isImage(array $item): bool
     {
         return ($item['media_type'] ?? 'image') === 'image';
     }
 
-    /**
-     * Check if media item is audio
-     */
     public static function isAudio(array $item): bool
     {
         return ($item['media_type'] ?? 'image') === 'audio';
+    }
+
+    public static function isVideo(array $item): bool
+    {
+        return ($item['media_type'] ?? 'image') === 'video';
     }
 }

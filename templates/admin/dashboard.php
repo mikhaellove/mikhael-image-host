@@ -186,15 +186,16 @@ $user = Auth::getUser();
 
     <div class="gallery">
         <?php foreach ($images as $image): ?>
-            <?php $isAudio = \App\Models\Image::isAudio($image); ?>
+            <?php $isImageOnly = \App\Models\Image::isImage($image); ?>
+            <?php $thumbMime = \App\Models\Image::isAudio($image) ? 'png' : 'jpeg'; ?>
             <div class="gallery-item" id="gallery-item-<?= $image['id'] ?>">
                 <button class="image-action-btn share-btn" onclick="openShareSettings(<?= $image['id'] ?>)" title="Share Settings">⚙️</button>
                 <button class="image-action-btn copy-link-btn" onclick="copyImageLink('<?= htmlspecialchars($image['slug']) ?>', event)" title="Copy Link">🔗</button>
-                <?php if (!$isAudio): ?>
+                <?php if ($isImageOnly): ?>
                     <button class="image-action-btn edit-btn" onclick="openImageEditor(<?= $image['id'] ?>, '<?= htmlspecialchars($image['slug']) ?>')" title="Edit Image">✏️</button>
                     <button class="image-action-btn rotate-btn" onclick="rotateImage(<?= $image['id'] ?>)" title="Rotate 90° clockwise">↻</button>
                 <?php endif; ?>
-                <img id="img-<?= $image['id'] ?>" src="data:image/<?= $isAudio ? 'png' : 'jpeg' ?>;base64,<?= base64_encode($image['thumb_data']) ?>" alt="">
+                <img id="img-<?= $image['id'] ?>" src="data:image/<?= $thumbMime ?>;base64,<?= base64_encode($image['thumb_data']) ?>" alt="">
                 <div class="gallery-item-info">
                     <a href="/v/<?= htmlspecialchars($image['slug']) ?>" target="_blank">View</a> |
                     <a href="#" onclick="deleteImage(<?= $image['id'] ?>); return false;">Delete</a>

@@ -34,6 +34,20 @@
                 <small style="color: #666; display: block; margin-top: 5px;">If set, the user's password is replaced and "Must Reset" is cleared.</small>
             </div>
 
+            <div style="margin-top: 20px; padding-top: 20px; border-top: 1px solid #ddd;">
+                <label style="display: block; font-weight: 600; margin-bottom: 8px;">API Token</label>
+                <div id="tokenStatus" style="font-size: 14px; color: #666; margin-bottom: 10px;"></div>
+                <div id="tokenValue" style="display: none; margin-bottom: 10px;">
+                    <input type="text" id="tokenInput" readonly style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-family: monospace; font-size: 12px; box-sizing: border-box;">
+                    <small style="color: #856404; display: block; margin-top: 4px;">Copy this token now — it will not be shown again after you close this dialog.</small>
+                    <button type="button" onclick="copyToken()" class="btn" style="margin-top: 8px; background: #17a2b8;">Copy to Clipboard</button>
+                </div>
+                <div style="display: flex; gap: 10px;">
+                    <button type="button" id="generateTokenBtn" onclick="generateToken()" class="btn" style="background: #28a745;">Generate New Token</button>
+                    <button type="button" id="revokeTokenBtn" onclick="revokeToken()" class="btn btn-danger" style="display: none;">Revoke Token</button>
+                </div>
+            </div>
+
             <div style="display: flex; gap: 10px; margin-top: 20px;">
                 <button type="submit" class="btn" style="flex: 1;">Save Changes</button>
                 <button type="button" onclick="closeEditUser()" class="btn" style="flex: 1; background: #6c757d;">Cancel</button>
@@ -48,6 +62,8 @@
     function openEditUser(userId) {
         document.getElementById('editUserId').value = userId;
         document.getElementById('editUserStatus').innerHTML = '';
+        document.getElementById('tokenValue').style.display = 'none';
+        document.getElementById('tokenStatus').textContent = 'Loading...';
         document.getElementById('editUserModal').style.display = 'flex';
 
         fetch('/admin/get-user?id=' + encodeURIComponent(userId))
@@ -63,6 +79,7 @@
                 document.getElementById('editName').value = u.name || '';
                 document.getElementById('editRole').value = u.role || 'user';
                 document.getElementById('editPassword').value = '';
+                renderTokenSection(u.has_token);
             })
             .catch(err => {
                 document.getElementById('editUserStatus').innerHTML =
@@ -70,10 +87,72 @@
             });
     }
 
+    let tokenIsActive = false;
+
+    function renderTokenSection(hasToken) {
+        tokenIsActive = hasToken;
+        document.getElementById('tokenStatus').textContent = hasToken ? 'Status: Active' : 'Status: None';
+        document.getElementById('tokenStatus').style.color = hasToken ? '#28a745' : '#6c757d';
+        document.getElementById('revokeTokenBtn').style.display = hasToken ? 'inline-block' : 'none';
+        document.getElementById('generateTokenBtn').textContent = hasToken ? 'Regenerate Token' : 'Generate New Token';
+    }
+
+    async function generateToken() {
+        const userId = document.getElementById('editUserId').value;
+        if (tokenIsActive && !confirm('This will invalidate the existing token. Continue?')) return;
+
+        const formData = new FormData();
+        formData.append('user_id', userId);
+        formData.append('csrf_token', '<?= \App\Core\Auth::generateCsrfToken() ?>');
+
+        try {
+            const response = await fetch('/admin/generate-token', { method: 'POST', body: formData });
+            const result = await response.json();
+            if (result.success) {
+                document.getElementById('tokenInput').value = result.token;
+                document.getElementById('tokenValue').style.display = 'block';
+                renderTokenSection(true);
+            } else {
+                alert('Failed to generate token: ' + (result.error || 'Unknown error'));
+            }
+        } catch (err) {
+            alert('Failed to generate token: ' + err.message);
+        }
+    }
+
+    async function revokeToken() {
+        if (!confirm('Revoke this user\'s API token? Any active CLI or mobile clients using it will stop working.')) return;
+
+        const userId = document.getElementById('editUserId').value;
+        const formData = new FormData();
+        formData.append('user_id', userId);
+        formData.append('csrf_token', '<?= \App\Core\Auth::generateCsrfToken() ?>');
+
+        try {
+            const response = await fetch('/admin/revoke-token', { method: 'POST', body: formData });
+            const result = await response.json();
+            if (result.success) {
+                document.getElementById('tokenValue').style.display = 'none';
+                renderTokenSection(false);
+            } else {
+                alert('Failed to revoke token: ' + (result.error || 'Unknown error'));
+            }
+        } catch (err) {
+            alert('Failed to revoke token: ' + err.message);
+        }
+    }
+
+    function copyToken() {
+        const input = document.getElementById('tokenInput');
+        input.select();
+        navigator.clipboard.writeText(input.value);
+    }
+
     function closeEditUser() {
         document.getElementById('editUserModal').style.display = 'none';
         document.getElementById('editUserForm').reset();
         document.getElementById('editUserStatus').innerHTML = '';
+        document.getElementById('tokenValue').style.display = 'none';
     }
 
     document.getElementById('editUserModal').addEventListener('click', function(e) {

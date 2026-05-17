@@ -70,7 +70,6 @@ include __DIR__ . '/../layout/header.php';
         font-size: 12px;
     }
 </style>
-
 <nav>
     <div class="container">
         <div>
@@ -244,7 +243,7 @@ include __DIR__ . '/../layout/header.php';
         <div class="gallery">
             <?php foreach ($images as $image): ?>
                 <div class="gallery-item">
-                    <img src="data:image/jpeg;base64,<?= base64_encode($image['thumb_data']) ?>" alt="">
+                    <img src="data:image/<?= \App\Models\Image::isAudio($image) ? 'png' : 'jpeg' ?>;base64,<?= base64_encode($image['thumb_data']) ?>" alt="">
                     <div class="gallery-item-info">
                         <strong><?= htmlspecialchars($image['username']) ?></strong><br>
                         <a href="/v/<?= htmlspecialchars($image['slug']) ?>" target="_blank">View</a> |
