@@ -59,21 +59,9 @@
                         <input type="checkbox" name="show_views" id="show_views" value="1">
                         <span>View Count</span>
                     </label>
-                    <label style="display: flex; align-items: center; gap: 6px; font-weight: normal; cursor: pointer;">
-                        <input type="checkbox" name="show_size" id="show_size" value="1">
-                        <span>File Size</span>
-                    </label>
-                    <label id="dimension_option" style="display: flex; align-items: center; gap: 6px; font-weight: normal; cursor: pointer;">
-                        <input type="checkbox" name="show_dimensions" id="show_dimensions" value="1">
-                        <span>Dimensions</span>
-                    </label>
                     <label id="duration_option" style="display: none; align-items: center; gap: 6px; font-weight: normal; cursor: pointer;">
                         <input type="checkbox" name="show_duration" id="show_duration" value="1">
                         <span>Duration</span>
-                    </label>
-                    <label style="display: flex; align-items: center; gap: 6px; font-weight: normal; cursor: pointer;">
-                        <input type="checkbox" name="show_format" id="show_format" value="1">
-                        <span>File Format</span>
                     </label>
                     <label id="download_option" style="display: none; align-items: center; gap: 6px; font-weight: normal; cursor: pointer;">
                         <input type="checkbox" name="show_download" id="show_download" value="1">
@@ -145,10 +133,9 @@
                 // Load caption into WYSIWYG editor
                 initWysiwygCaption('share', settings.caption || '');
 
-                // Show/hide dimension vs duration vs download based on media type
+                // Show/hide duration and download based on media type
                 const isNonImage = settings.media_type === 'audio' || settings.media_type === 'video';
                 const isVideo = settings.media_type === 'video';
-                document.getElementById('dimension_option').style.display = isNonImage ? 'none' : 'flex';
                 document.getElementById('duration_option').style.display = isNonImage ? 'flex' : 'none';
                 document.getElementById('download_option').style.display = isVideo ? 'flex' : 'none';
 
@@ -159,10 +146,7 @@
                     document.getElementById('show_caption').checked = metadata.show_caption || false;
                     document.getElementById('show_date').checked = metadata.show_date || false;
                     document.getElementById('show_views').checked = metadata.show_views || false;
-                    document.getElementById('show_size').checked = metadata.show_size || false;
-                    document.getElementById('show_dimensions').checked = metadata.show_dimensions || false;
                     document.getElementById('show_duration').checked = metadata.show_duration || false;
-                    document.getElementById('show_format').checked = metadata.show_format || false;
                     document.getElementById('show_download').checked = metadata.show_download || false;
                 }
 

@@ -155,6 +155,20 @@ class ImageProcessor
         return extension_loaded('imagick');
     }
 
+    public static function processToSlot(string $tempFilePath): array
+    {
+        $result = self::process($tempFilePath);
+        $masterData = $result['master'];
+        return [
+            'data'      => base64_encode($masterData),
+            'original'  => base64_encode($masterData),
+            'thumb'     => base64_encode($result['thumbnail']),
+            'mime_type' => 'image/jpeg',
+            'file_size' => strlen($masterData),
+            'metadata'  => $result['metadata'],
+        ];
+    }
+
     /**
      * Rotate existing image data 90 degrees clockwise
      */

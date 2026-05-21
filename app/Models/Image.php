@@ -68,7 +68,8 @@ class Image
         string $mediaType = 'image',
         ?int $duration = null,
         ?int $fileSize = null,
-        string $mimeType = 'image/jpeg'
+        string $mimeType = 'image/jpeg',
+        int $slotCount = 1
     ): int {
         $db = Database::getInstance()->getConnection();
 
@@ -100,9 +101,20 @@ class Image
             $placeholders[] = '?';
         }
 
-        if ($hasOriginalColumn) {
+        // Add slot_count if the column exists (migration 011)
+        try {
+            $checkStmt = $db->query("SHOW COLUMNS FROM images LIKE 'slot_count'");
+            if ($checkStmt->rowCount() > 0) {
+                $columns[] = 'slot_count';
+                $values[] = $slotCount;
+                $placeholders[] = '?';
+            }
+        } catch (\Exception $e) {}
+
+        // Only store original_image_data for legacy binary uploads, not gallery JSON
+        if ($hasOriginalColumn && strlen($imageData) > 0 && ord($imageData[0]) !== 0x5B) {
             $columns[] = 'original_image_data';
-            $values[] = $imageData; // Store original
+            $values[] = $imageData;
             $placeholders[] = '?';
         }
 
@@ -217,9 +229,18 @@ class Image
             // Column doesn't exist, continue without it
         }
 
+        // Check if slot_count column exists
+        $slotCountColumn = '';
+        try {
+            $checkStmt = $db->query("SHOW COLUMNS FROM images LIKE 'slot_count'");
+            if ($checkStmt->rowCount() > 0) {
+                $slotCountColumn = ', slot_count';
+            }
+        } catch (\Exception $e) {}
+
         // Only load thumbnail data, not full image data
         $stmt = $db->prepare("
-            SELECT id, slug, thumb_data, caption, created_at{$viewCountColumn}{$mediaColumns}
+            SELECT id, slug, thumb_data, caption, created_at{$viewCountColumn}{$mediaColumns}{$slotCountColumn}
             FROM images
             WHERE user_id = ? AND deleted_at IS NULL
             ORDER BY created_at DESC
@@ -454,5 +475,55 @@ class Image
     public static function isVideo(array $item): bool
     {
         return ($item['media_type'] ?? 'image') === 'video';
+    }
+
+    // --- Gallery slot helpers ---
+
+    public static function decodeSlots(string $blob): ?array
+    {
+        if ($blob === '' || ord($blob[0]) !== 0x5B) {
+            return null; // Legacy binary format (JPEG starts with 0xFF, not '[')
+        }
+        $slots = json_decode($blob, true);
+        return is_array($slots) ? $slots : null;
+    }
+
+    public static function encodeSlots(array $slots): string
+    {
+        return json_encode($slots, JSON_UNESCAPED_SLASHES);
+    }
+
+    public static function getThumbFromSlots(array $slots): string
+    {
+        return base64_decode($slots[0]['thumb'] ?? '');
+    }
+
+    public static function updateSlots(int $imageId, array $slots, ?string $newThumbData = null): bool
+    {
+        $db = Database::getInstance()->getConnection();
+        $imageData = self::encodeSlots($slots);
+        $slotCount = count($slots);
+
+        $hasSlotCount = false;
+        try {
+            $chk = $db->query("SHOW COLUMNS FROM images LIKE 'slot_count'");
+            $hasSlotCount = $chk->rowCount() > 0;
+        } catch (\Exception $e) {}
+
+        if ($newThumbData !== null) {
+            if ($hasSlotCount) {
+                $stmt = $db->prepare("UPDATE images SET image_data = ?, thumb_data = ?, slot_count = ? WHERE id = ?");
+                return $stmt->execute([$imageData, $newThumbData, $slotCount, $imageId]);
+            }
+            $stmt = $db->prepare("UPDATE images SET image_data = ?, thumb_data = ? WHERE id = ?");
+            return $stmt->execute([$imageData, $newThumbData, $imageId]);
+        }
+
+        if ($hasSlotCount) {
+            $stmt = $db->prepare("UPDATE images SET image_data = ?, slot_count = ? WHERE id = ?");
+            return $stmt->execute([$imageData, $slotCount, $imageId]);
+        }
+        $stmt = $db->prepare("UPDATE images SET image_data = ? WHERE id = ?");
+        return $stmt->execute([$imageData, $imageId]);
     }
 }

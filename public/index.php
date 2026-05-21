@@ -92,6 +92,11 @@ $router->get('/raw/{slug}', function($slug) {
     $controller->serveRawImage($slug);
 });
 
+$router->get('/raw/{slug}/{index}', function($slug, $index) {
+    $controller = new ViewerController();
+    $controller->serveRawImageByIndex($slug, (int)$index);
+});
+
 $router->get('/thumb/{slug}', function($slug) {
     $controller = new ViewerController();
     $controller->serveThumbnail($slug);
@@ -241,6 +246,37 @@ $router->post('/admin/landing-page-delete', function() {
 $router->post('/admin/landing-page-set-active', function() {
     $controller = new AdminController();
     $controller->setActiveLandingPage();
+});
+
+// Gallery routes
+$router->post('/admin/gallery-upload', function() {
+    $controller = new AdminController();
+    $controller->handleGalleryUpload();
+});
+
+$router->post('/admin/process-gallery-image', function() {
+    $controller = new AdminController();
+    $controller->handleProcessGalleryImage();
+});
+
+$router->post('/admin/update-images', function() {
+    $controller = new AdminController();
+    $controller->handleUpdateImages();
+});
+
+$router->get('/admin/gallery-get-slots', function() {
+    $controller = new AdminController();
+    $controller->getGallerySlots();
+});
+
+$router->get('/admin/gallery-picker-items', function() {
+    $controller = new AdminController();
+    $controller->getGalleryPickerItems();
+});
+
+$router->post('/admin/save-settings', function() {
+    $controller = new AdminController();
+    $controller->handleSaveSettings();
 });
 
 // API routes

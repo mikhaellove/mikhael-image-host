@@ -4,57 +4,61 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <?php $plainCaption = trim(strip_tags($image['caption'] ?? '')); ?>
-    <title><?= htmlspecialchars($plainCaption !== '' ? $plainCaption : 'Image') ?></title>
+    <title><?= htmlspecialchars($plainCaption !== '' ? $plainCaption : 'Gallery') ?></title>
 
-    <!-- OpenGraph Meta Tags -->
-    <meta property="og:title" content="<?= htmlspecialchars($plainCaption !== '' ? $plainCaption : 'Shared Image') ?>">
+    <meta property="og:title" content="<?= htmlspecialchars($plainCaption !== '' ? $plainCaption : 'Shared Gallery') ?>">
     <meta property="og:type" content="website">
     <meta property="og:image" content="<?= htmlspecialchars($_SERVER['REQUEST_SCHEME'] . '://' . $_SERVER['HTTP_HOST'] . '/raw/' . $image['slug']) ?>">
     <meta property="og:url" content="<?= htmlspecialchars($_SERVER['REQUEST_SCHEME'] . '://' . $_SERVER['HTTP_HOST'] . $_SERVER['REQUEST_URI']) ?>">
     <meta property="og:description" content="<?= htmlspecialchars($plainCaption) ?>">
 
     <style>
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
 
         body {
             background: #000;
-            margin: 0;
-            padding: 0;
             overflow-x: hidden;
             overflow-y: auto;
             min-height: 100vh;
         }
 
-        .image-container {
-            width: 100%;
-            height: 100vh;
+        .gallery-container {
             display: flex;
+            flex-direction: column;
             align-items: center;
-            justify-content: center;
-            position: relative;
+            padding: 40px 20px;
+            gap: 20px;
         }
 
-        img {
+        .gallery-image-wrap {
+            width: 100%;
+            display: flex;
+            justify-content: center;
+        }
+
+        .gallery-image-wrap img {
             max-width: 90vw;
             max-height: 90vh;
             display: block;
+            object-fit: contain;
+        }
+
+        .gallery-divider {
+            width: 90vw;
+            max-width: 900px;
+            height: 1px;
+            background: rgba(255,255,255,0.1);
         }
 
         .metadata-section {
             width: 100%;
-            background: #000;
-            padding: 40px 20px;
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            padding: 20px;
         }
 
         .metadata-container {
             max-width: 800px;
             margin: 0 auto;
-            background: rgba(30, 30, 30, 0.9);
+            background: rgba(30,30,30,0.9);
             border-radius: 8px;
             padding: 30px;
         }
@@ -72,14 +76,9 @@
             gap: 10px;
         }
 
-        .metadata-icon {
-            font-size: 20px;
-            opacity: 0.8;
-        }
+        .metadata-icon { font-size: 20px; opacity: 0.8; }
 
-        .metadata-content {
-            flex: 1;
-        }
+        .metadata-content { flex: 1; }
 
         .metadata-label {
             font-size: 12px;
@@ -89,19 +88,13 @@
             margin-bottom: 4px;
         }
 
-        .metadata-value {
-            font-size: 16px;
-            color: #fff;
-        }
+        .metadata-value { font-size: 16px; color: #fff; }
 
         .metadata-caption {
             display: flex;
             align-items: flex-start;
             gap: 10px;
             color: #fff;
-        }
-
-        .metadata-grid + .metadata-caption {
             margin-top: 20px;
         }
 
@@ -111,37 +104,34 @@
             font-size: 20px;
             margin-bottom: 20px;
         }
-
-        .metadata-display-name:last-child {
-            margin-bottom: 0;
-        }
     </style>
 </head>
 <body>
-    <div class="image-container">
-        <img src="/raw/<?= htmlspecialchars($image['slug']) ?>" alt="<?= htmlspecialchars($plainCaption) ?>">
+    <div class="gallery-container">
+        <?php foreach ($slots as $i => $slot): ?>
+            <?php if ($i > 0): ?>
+                <div class="gallery-divider"></div>
+            <?php endif; ?>
+            <div class="gallery-image-wrap">
+                <img src="/raw/<?= htmlspecialchars($image['slug']) ?>/<?= $i ?>"
+                     alt="<?= htmlspecialchars($plainCaption) ?> (<?= $i + 1 ?> of <?= count($slots) ?>)">
+            </div>
+        <?php endforeach; ?>
     </div>
 
     <?php
-    // Parse display metadata settings
     $displayMetadata = null;
     if (!empty($image['display_metadata'])) {
         $displayMetadata = json_decode($image['display_metadata'], true);
     }
 
-    // Check if any metadata should be displayed
     $showMetadata = false;
     if ($displayMetadata) {
-        foreach ($displayMetadata as $key => $value) {
-            if ($value) {
-                $showMetadata = true;
-                break;
-            }
+        foreach ($displayMetadata as $value) {
+            if ($value) { $showMetadata = true; break; }
         }
     }
-    ?>
 
-    <?php
     $hasNonCaptionMetadata = (
         (!empty($displayMetadata['show_date']) && !empty($image['created_at']))
         || (!empty($displayMetadata['show_views']) && isset($image['view_count']))
@@ -167,7 +157,6 @@
                         <div class="metadata-icon">📅</div>
                         <div class="metadata-content">
                             <div class="metadata-label">Uploaded</div>
-
                             <div class="metadata-value"><?= (new DateTime($image['created_at']))->setTimezone(new DateTimeZone(date_default_timezone_get()))->format('M j, Y g:i A T') ?></div>
                         </div>
                     </div>
@@ -182,8 +171,6 @@
                         </div>
                     </div>
                 <?php endif; ?>
-
-
             </div>
             <?php endif; ?>
 

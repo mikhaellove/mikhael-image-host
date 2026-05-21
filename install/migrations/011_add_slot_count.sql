@@ -1,0 +1,1 @@
+ALTER TABLE `images` ADD COLUMN `slot_count` TINYINT UNSIGNED NOT NULL DEFAULT 1 AFTER `media_type`;

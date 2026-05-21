@@ -1,5 +1,5 @@
 <!-- Image Editor Modal -->
-<div id="imageEditorModal" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: #000; z-index: 2000;">
+<div id="imageEditorModal" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: #000; z-index: 100000;">
     <div style="height: 100%; display: flex; flex-direction: column;">
         <!-- Header -->
         <div style="background: #1a1a1a; padding: 15px 20px; display: flex; justify-content: space-between; align-items: center; border-bottom: 1px solid #333;">
@@ -139,6 +139,7 @@
     let editorState = {
         imageId: null,
         slug: null,
+        slotIndex: null,
         originalImage: null,
         currentFilter: 'original',
         brightness: 0,
@@ -151,9 +152,10 @@
         cropEnd: null
     };
 
-    async function openImageEditor(imageId, slug) {
+    async function openImageEditor(imageId, slug, slotIndex = null) {
         editorState.imageId = imageId;
         editorState.slug = slug;
+        editorState.slotIndex = slotIndex;
         document.getElementById('editorImageId').value = imageId;
         document.getElementById('imageEditorModal').style.display = 'block';
 
@@ -161,8 +163,9 @@
         editorState.canvas = document.getElementById('editorCanvas');
         editorState.ctx = editorState.canvas.getContext('2d');
 
-        // Load image
-        await loadEditorImage(slug);
+        // Load image from slot-aware URL
+        const imgSrc = slotIndex !== null ? `/raw/${slug}/${slotIndex}` : `/raw/${slug}`;
+        await loadEditorImage(imgSrc);
 
         document.getElementById('editorStatus').textContent = 'Image loaded. Make your edits and click Apply Changes.';
     }
@@ -172,10 +175,8 @@
         resetAllEdits();
     }
 
-    async function loadEditorImage(slug) {
+    async function loadEditorImage(imageSrc) {
         try {
-            // Load master image from /raw/{slug} endpoint
-            const imageSrc = '/raw/' + slug;
 
             const image = new Image();
             image.onload = function() {
@@ -431,27 +432,31 @@
         formData.append('contrast', editorState.contrast);
         formData.append('filter', editorState.currentFilter);
 
-        // Add crop data if available
         if (editorState.cropData) {
             formData.append('crop', JSON.stringify(editorState.cropData));
+        }
+
+        if (editorState.slotIndex !== null) {
+            formData.append('slot_index', editorState.slotIndex);
         }
 
         formData.append('csrf_token', '<?= \App\Core\Auth::generateCsrfToken() ?>');
 
         try {
-            const response = await fetch('/admin/edit-image', {
-                method: 'POST',
-                body: formData
-            });
-
+            const response = await fetch('/admin/edit-image', { method: 'POST', body: formData });
             const result = await response.json();
 
             if (result.success) {
                 statusDiv.textContent = 'Changes applied successfully!';
                 setTimeout(() => {
                     closeImageEditor();
-                    location.reload();
-                }, 1000);
+                    // If called from gallery editor, reload gallery editor; otherwise reload page
+                    if (galleryEditorState.isOpen) {
+                        openGalleryEditor(galleryEditorState.imageId, galleryEditorState.slug);
+                    } else {
+                        location.reload();
+                    }
+                }, 800);
             } else {
                 statusDiv.textContent = 'Error: ' + result.error;
             }
@@ -471,27 +476,342 @@
 
         const formData = new FormData();
         formData.append('image_id', editorState.imageId);
+        if (editorState.slotIndex !== null) {
+            formData.append('slot_index', editorState.slotIndex);
+        }
         formData.append('csrf_token', '<?= \App\Core\Auth::generateCsrfToken() ?>');
 
         try {
-            const response = await fetch('/admin/revert-to-original', {
-                method: 'POST',
-                body: formData
-            });
-
+            const response = await fetch('/admin/revert-to-original', { method: 'POST', body: formData });
             const result = await response.json();
 
             if (result.success) {
                 statusDiv.textContent = 'Reverted to original successfully!';
                 setTimeout(() => {
                     closeImageEditor();
-                    location.reload();
-                }, 1000);
+                    if (galleryEditorState.isOpen) {
+                        openGalleryEditor(galleryEditorState.imageId, galleryEditorState.slug);
+                    } else {
+                        location.reload();
+                    }
+                }, 800);
             } else {
                 statusDiv.textContent = 'Error: ' + result.error;
             }
         } catch (error) {
             statusDiv.textContent = 'Error reverting: ' + error.message;
+        }
+    }
+</script>
+
+<!-- Gallery Editor Modal -->
+<div id="galleryEditorModal" style="display:none; position:fixed; top:0; left:0; right:0; bottom:0; background:#000; z-index:2000;">
+    <div style="height:100%; display:flex; flex-direction:column;">
+        <!-- Header -->
+        <div style="background:#1a1a1a; padding:15px 20px; display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid #333; flex-shrink:0;">
+            <div style="display:flex; align-items:center; gap:15px;">
+                <h2 style="margin:0; color:#fff;">Gallery Editor</h2>
+                <span id="gallerySlotCountBadge" style="color:#aaa; font-size:14px;"></span>
+            </div>
+            <div style="display:flex; gap:10px;">
+                <button onclick="saveGalleryEdits()" class="btn" style="background:#28a745;">Save</button>
+                <button onclick="closeGalleryEditor()" class="btn" style="background:#6c757d;">Cancel</button>
+            </div>
+        </div>
+
+        <!-- Slot strip -->
+        <div style="background:#111; padding:20px; flex-shrink:0; overflow-x:auto; border-bottom:1px solid #333;">
+            <div id="gallerySlotStrip" style="display:flex; gap:12px; align-items:flex-start; min-height:160px;"></div>
+        </div>
+
+        <!-- Caption -->
+        <div style="background:#1a1a1a; padding:15px 20px; flex-shrink:0; border-bottom:1px solid #333;">
+            <label style="color:#aaa; font-size:13px; display:block; margin-bottom:6px;">Caption (optional)</label>
+            <textarea id="galleryEditorCaption" style="width:100%; background:#2a2a2a; color:#fff; border:1px solid #444; border-radius:4px; padding:8px; font-size:14px; resize:vertical; min-height:60px;"></textarea>
+        </div>
+
+        <!-- Status -->
+        <div style="background:#1a1a1a; padding:10px 20px; color:#aaa; flex-shrink:0;" id="galleryEditorStatus">Ready</div>
+    </div>
+</div>
+
+<style>
+    .gallery-slot-card {
+        position: relative;
+        flex-shrink: 0;
+        cursor: grab;
+        user-select: none;
+    }
+
+    .gallery-slot-card:active { cursor: grabbing; }
+
+    .gallery-slot-card.drag-over { outline: 2px dashed #fff; }
+
+    .gallery-slot-card img {
+        width: 120px;
+        height: 120px;
+        object-fit: cover;
+        display: block;
+        border-radius: 4px;
+    }
+
+    .gallery-slot-actions {
+        display: flex;
+        gap: 4px;
+        margin-top: 6px;
+        justify-content: center;
+    }
+
+    .gallery-slot-actions button {
+        background: #2a2a2a;
+        color: #fff;
+        border: 1px solid #444;
+        border-radius: 4px;
+        padding: 4px 8px;
+        cursor: pointer;
+        font-size: 13px;
+        transition: background 0.15s;
+    }
+
+    .gallery-slot-actions button:hover { background: #3a3a3a; }
+
+    .gallery-add-btn {
+        width: 120px;
+        height: 120px;
+        border: 2px dashed #555;
+        border-radius: 4px;
+        background: #1e1e1e;
+        color: #777;
+        font-size: 32px;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex-shrink: 0;
+        transition: border-color 0.15s, color 0.15s;
+    }
+
+    .gallery-add-btn:hover { border-color: #28a745; color: #28a745; }
+</style>
+
+<script>
+    let galleryEditorState = {
+        isOpen: false,
+        imageId: null,
+        slug: null,
+        slots: [],        // array of slot objects fetched from server
+        maxSlots: <?= (int)\App\Models\Setting::get('max_gallery_images', 5) ?>,
+        dragSrcIndex: null,
+    };
+
+    let addSlotFileInput = null;
+
+    function ensureAddSlotInput() {
+        if (!addSlotFileInput) {
+            addSlotFileInput = document.createElement('input');
+            addSlotFileInput.type = 'file';
+            addSlotFileInput.accept = 'image/*';
+            addSlotFileInput.style.display = 'none';
+            addSlotFileInput.addEventListener('change', async function() {
+                if (!this.files[0]) return;
+                await processAndAddSlot(this.files[0]);
+            });
+            document.body.appendChild(addSlotFileInput);
+        }
+        return addSlotFileInput;
+    }
+
+    async function openGalleryEditor(imageId, slug) {
+        galleryEditorState.imageId = imageId;
+        galleryEditorState.slug = slug;
+        galleryEditorState.isOpen = true;
+        galleryEditorState.slots = [];
+
+        document.getElementById('galleryEditorStatus').textContent = 'Loading...';
+        document.getElementById('galleryEditorModal').style.display = 'block';
+
+        // Fetch current slots from a lightweight endpoint
+        try {
+            const resp = await fetch('/admin/gallery-get-slots?image_id=' + imageId);
+            const data = await resp.json();
+            if (data.success) {
+                galleryEditorState.slots = data.slots;
+                galleryEditorState.maxSlots = data.max_slots;
+                document.getElementById('galleryEditorCaption').value = data.caption || '';
+                renderGallerySlotStrip();
+                document.getElementById('galleryEditorStatus').textContent = 'Ready';
+            } else {
+                document.getElementById('galleryEditorStatus').textContent = 'Error: ' + data.error;
+            }
+        } catch (e) {
+            document.getElementById('galleryEditorStatus').textContent = 'Failed to load gallery data.';
+        }
+    }
+
+    function closeGalleryEditor() {
+        document.getElementById('galleryEditorModal').style.display = 'none';
+        galleryEditorState.isOpen = false;
+        galleryEditorState.slots = [];
+    }
+
+    function renderGallerySlotStrip() {
+        const strip = document.getElementById('gallerySlotStrip');
+        const slots = galleryEditorState.slots;
+        strip.innerHTML = '';
+
+        document.getElementById('gallerySlotCountBadge').textContent =
+            slots.length + ' / ' + galleryEditorState.maxSlots + ' images';
+
+        slots.forEach((slot, i) => {
+            const card = document.createElement('div');
+            card.className = 'gallery-slot-card';
+            card.draggable = true;
+            card.dataset.index = i;
+
+            card.innerHTML = `
+                <img src="data:image/jpeg;base64,${slot.thumb}" alt="Slot ${i+1}">
+                <div class="gallery-slot-actions">
+                    <button onclick="galleryEditSlotCanvas(${i})" title="Edit">✏️</button>
+                    <button onclick="galleryRotateSlot(${i})" title="Rotate">↻</button>
+                    <button onclick="galleryRemoveSlot(${i})" title="Remove" style="background:#6c2a2a;">✕</button>
+                </div>`;
+
+            card.addEventListener('dragstart', e => {
+                galleryEditorState.dragSrcIndex = i;
+                e.dataTransfer.effectAllowed = 'move';
+            });
+            card.addEventListener('dragover', e => {
+                e.preventDefault();
+                card.classList.add('drag-over');
+            });
+            card.addEventListener('dragleave', () => card.classList.remove('drag-over'));
+            card.addEventListener('drop', e => {
+                e.preventDefault();
+                card.classList.remove('drag-over');
+                const src = galleryEditorState.dragSrcIndex;
+                if (src === null || src === i) return;
+                const arr = galleryEditorState.slots;
+                const [moved] = arr.splice(src, 1);
+                arr.splice(i, 0, moved);
+                galleryEditorState.dragSrcIndex = null;
+                renderGallerySlotStrip();
+            });
+
+            strip.appendChild(card);
+        });
+
+        // Add button
+        if (slots.length < galleryEditorState.maxSlots) {
+            const addBtn = document.createElement('button');
+            addBtn.className = 'gallery-add-btn';
+            addBtn.textContent = '+';
+            addBtn.title = 'Add image';
+            addBtn.onclick = () => {
+                const inp = ensureAddSlotInput();
+                inp.value = '';
+                inp.click();
+            };
+            strip.appendChild(addBtn);
+        }
+    }
+
+    function galleryEditSlotCanvas(slotIndex) {
+        openImageEditor(galleryEditorState.imageId, galleryEditorState.slug, slotIndex);
+    }
+
+    async function galleryRotateSlot(slotIndex) {
+        document.getElementById('galleryEditorStatus').textContent = 'Rotating...';
+        const formData = new FormData();
+        formData.append('image_id', galleryEditorState.imageId);
+        formData.append('slot_index', slotIndex);
+        formData.append('csrf_token', '<?= \App\Core\Auth::generateCsrfToken() ?>');
+
+        try {
+            const response = await fetch('/admin/rotate-image', { method: 'POST', body: formData });
+            const result = await response.json();
+            if (result.success) {
+                // Reload the gallery editor to pick up new thumbnail
+                openGalleryEditor(galleryEditorState.imageId, galleryEditorState.slug);
+            } else {
+                document.getElementById('galleryEditorStatus').textContent = 'Error: ' + result.error;
+            }
+        } catch (e) {
+            document.getElementById('galleryEditorStatus').textContent = 'Rotation failed.';
+        }
+    }
+
+    function galleryRemoveSlot(slotIndex) {
+        if (galleryEditorState.slots.length <= 1) {
+            alert('A gallery must have at least one image.');
+            return;
+        }
+        galleryEditorState.slots.splice(slotIndex, 1);
+        renderGallerySlotStrip();
+    }
+
+    async function processAndAddSlot(file) {
+        document.getElementById('galleryEditorStatus').textContent = 'Processing new image...';
+        const formData = new FormData();
+        formData.append('image', file, file.name || 'image.jpg');
+        formData.append('csrf_token', '<?= \App\Core\Auth::generateCsrfToken() ?>');
+
+        try {
+            const response = await fetch('/admin/process-gallery-image', { method: 'POST', body: formData });
+            const result = await response.json();
+            if (result.success) {
+                galleryEditorState.slots.push(result.slot);
+                renderGallerySlotStrip();
+                document.getElementById('galleryEditorStatus').textContent = 'Image added. Click Save to keep changes.';
+            } else {
+                document.getElementById('galleryEditorStatus').textContent = 'Error: ' + result.error;
+            }
+        } catch (e) {
+            document.getElementById('galleryEditorStatus').textContent = 'Failed to process image.';
+        }
+    }
+
+    async function saveGalleryEdits() {
+        const statusDiv = document.getElementById('galleryEditorStatus');
+        statusDiv.textContent = 'Saving...';
+
+        // Strip metadata from slots before sending (keeps payload manageable)
+        const slotsToSave = galleryEditorState.slots.map(s => ({
+            data:      s.data,
+            original:  s.original,
+            thumb:     s.thumb,
+            mime_type: s.mime_type,
+            file_size: s.file_size,
+        }));
+
+        const formData = new FormData();
+        formData.append('image_id', galleryEditorState.imageId);
+        formData.append('slots', JSON.stringify(slotsToSave));
+        formData.append('csrf_token', '<?= \App\Core\Auth::generateCsrfToken() ?>');
+
+        // Save caption update via share settings endpoint
+        const caption = document.getElementById('galleryEditorCaption').value.trim();
+        if (caption !== '') {
+            const capForm = new FormData();
+            capForm.append('image_id', galleryEditorState.imageId);
+            capForm.append('caption', caption);
+            capForm.append('csrf_token', '<?= \App\Core\Auth::generateCsrfToken() ?>');
+            await fetch('/admin/update-caption', { method: 'POST', body: capForm });
+        }
+
+        try {
+            const response = await fetch('/admin/update-images', { method: 'POST', body: formData });
+            const result = await response.json();
+            if (result.success) {
+                statusDiv.textContent = 'Saved!';
+                setTimeout(() => {
+                    closeGalleryEditor();
+                    location.reload();
+                }, 800);
+            } else {
+                statusDiv.textContent = 'Error: ' + result.error;
+            }
+        } catch (e) {
+            statusDiv.textContent = 'Save failed: ' + e.message;
         }
     }
 </script>

@@ -85,6 +85,70 @@ class Uploader
         ];
     }
 
+    public static function handleGalleryUpload(int $userId, array $files, ?string $caption = null): array
+    {
+        if (!Auth::isAuthenticated() || Auth::getUserId() !== $userId) {
+            throw new \RuntimeException("Unauthorized upload attempt");
+        }
+
+        $maxImages = (int)\App\Models\Setting::get('max_gallery_images', 5);
+
+        if (count($files) === 0) {
+            throw new \RuntimeException("No files provided");
+        }
+
+        if (count($files) > $maxImages) {
+            throw new \RuntimeException("Cannot upload more than {$maxImages} images at once");
+        }
+
+        $allowedTypes = ['image/png', 'image/jpeg', 'image/webp', 'image/heic'];
+        $slots = [];
+
+        foreach ($files as $file) {
+            if ($file['size'] > self::MAX_FILE_SIZE) {
+                throw new \RuntimeException("File exceeds maximum size limit of 250MB");
+            }
+            if ($file['error'] !== UPLOAD_ERR_OK) {
+                throw new \RuntimeException("File upload error: " . $file['error']);
+            }
+
+            $finfo = finfo_open(FILEINFO_MIME_TYPE);
+            $mimeType = finfo_file($finfo, $file['tmp_name']);
+            finfo_close($finfo);
+
+            if (!in_array($mimeType, $allowedTypes)) {
+                throw new \RuntimeException("Invalid file type: {$mimeType}. Only images are allowed in gallery uploads.");
+            }
+
+            $slots[] = ImageProcessor::processToSlot($file['tmp_name']);
+        }
+
+        $slug = SlugGenerator::generate();
+        $slotCount = count($slots);
+        $thumbData = base64_decode($slots[0]['thumb']);
+        $imageData = \App\Models\Image::encodeSlots($slots);
+
+        $imageId = Image::create(
+            $userId,
+            $slug,
+            $imageData,
+            $thumbData,
+            $caption,
+            null,
+            'image',
+            null,
+            null,
+            'image/jpeg',
+            $slotCount
+        );
+
+        return [
+            'id'   => $imageId,
+            'slug' => $slug,
+            'url'  => "/v/{$slug}",
+        ];
+    }
+
     public static function handleChunkedUpload(int $userId, string $chunkId, int $chunkIndex, int $totalChunks, string $chunkData): ?array
     {
         // Verify session and role

@@ -98,6 +98,40 @@ include __DIR__ . '/../layout/header.php';
         <?php unset($_SESSION['migration_error']); ?>
     <?php endif; ?>
 
+    <!-- Gallery Settings -->
+    <div class="section">
+        <h2>Gallery Settings</h2>
+        <p style="color:#666; margin-bottom:15px;">Configure limits for multi-image galleries.</p>
+        <form id="gallerySettingsForm">
+            <input type="hidden" name="csrf_token" value="<?= Auth::generateCsrfToken() ?>">
+            <div class="form-group" style="display:flex; align-items:center; gap:15px;">
+                <label for="max_gallery_images" style="white-space:nowrap; font-weight:600;">Max images per gallery</label>
+                <input type="number" id="max_gallery_images" name="max_gallery_images"
+                       min="1" max="20"
+                       value="<?= htmlspecialchars(\App\Models\Setting::get('max_gallery_images', 5)) ?>"
+                       style="width:80px; padding:8px; border:1px solid #ddd; border-radius:4px;">
+                <button type="submit" class="btn">Save</button>
+                <span id="gallerySettingsStatus" style="color:#28a745;"></span>
+            </div>
+        </form>
+        <script>
+            document.getElementById('gallerySettingsForm').addEventListener('submit', async function(e) {
+                e.preventDefault();
+                const formData = new FormData(this);
+                const status = document.getElementById('gallerySettingsStatus');
+                try {
+                    const resp = await fetch('/admin/save-settings', { method: 'POST', body: formData });
+                    const result = await resp.json();
+                    status.textContent = result.success ? '✓ Saved' : '✗ ' + result.error;
+                    status.style.color = result.success ? '#28a745' : '#dc3545';
+                } catch (e) {
+                    status.textContent = '✗ Failed';
+                    status.style.color = '#dc3545';
+                }
+            });
+        </script>
+    </div>
+
     <!-- Database Migrations -->
     <?php
     use App\Services\Migration;

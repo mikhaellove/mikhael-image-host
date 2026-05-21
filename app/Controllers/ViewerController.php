@@ -146,7 +146,12 @@ class ViewerController
         } elseif (Image::isVideo($image)) {
             include __DIR__ . '/../../templates/viewer/video.php';
         } else {
-            include __DIR__ . '/../../templates/viewer/image.php';
+            $slots = Image::decodeSlots($image['image_data'] ?? '');
+            if ($slots !== null) {
+                include __DIR__ . '/../../templates/viewer/gallery.php';
+            } else {
+                include __DIR__ . '/../../templates/viewer/image.php';
+            }
         }
     }
 
@@ -168,7 +173,16 @@ class ViewerController
             return;
         }
 
-        $data = $image['image_data'];
+        // Detect gallery format and serve first slot
+        $slots = Image::decodeSlots($image['image_data'] ?? '');
+        if ($slots !== null) {
+            $data = base64_decode($slots[0]['data'] ?? '');
+            $mimeType = $slots[0]['mime_type'] ?? 'image/jpeg';
+        } else {
+            $data = $image['image_data'];
+            $mimeType = $image['mime_type'];
+        }
+
         $totalLength = strlen($data);
         $start = 0;
         $end = $totalLength - 1;
@@ -190,11 +204,46 @@ class ViewerController
         }
 
         header('Accept-Ranges: bytes');
-        header('Content-Type: ' . $image['mime_type']);
+        header('Content-Type: ' . $mimeType);
         header('Content-Length: ' . ($end - $start + 1));
         header('Cache-Control: public, max-age=31536000');
 
         echo substr($data, $start, $end - $start + 1);
+    }
+
+    public function serveRawImageByIndex(string $slug, int $index): void
+    {
+        $ip = RateLimiter::getClientIp();
+        if ($ip === null || RateLimiter::isBlocked($ip)) {
+            http_response_code(403);
+            echo "403 - Forbidden";
+            return;
+        }
+
+        $image = Image::findBySlug($slug);
+
+        if (!$image) {
+            RateLimiter::recordFailedAttempt($ip);
+            http_response_code(404);
+            echo "404 - Image Not Found";
+            return;
+        }
+
+        $slots = Image::decodeSlots($image['image_data'] ?? '');
+        if ($slots === null || !isset($slots[$index])) {
+            http_response_code(404);
+            echo "404 - Slot Not Found";
+            return;
+        }
+
+        $data = base64_decode($slots[$index]['data'] ?? '');
+        $mimeType = $slots[$index]['mime_type'] ?? 'image/jpeg';
+
+        header('Content-Type: ' . $mimeType);
+        header('Content-Length: ' . strlen($data));
+        header('Cache-Control: public, max-age=31536000');
+
+        echo $data;
     }
 
     public function serveThumbnail(string $slug): void
