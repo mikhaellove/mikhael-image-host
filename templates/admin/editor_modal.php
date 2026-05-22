@@ -33,6 +33,13 @@
                     <button onclick="clearCrop()" class="btn" style="width: 100%; background: #dc3545; margin-top: 10px;">Clear Crop</button>
                 </div>
 
+                <!-- Mosaic Tool -->
+                <div style="margin-bottom: 30px;">
+                    <h3 style="color: #fff; margin-bottom: 15px;">Mosaic</h3>
+                    <button onclick="toggleMosaicMode()" id="mosaicModeBtn" class="btn" style="width: 100%; background: #6f42c1;">Mosaic</button>
+                    <button onclick="clearMosaicBoxes()" class="btn" style="width: 100%; background: #dc3545; margin-top: 10px;">Clear Mosaic</button>
+                </div>
+
                 <!-- Brightness -->
                 <div style="margin-bottom: 30px;">
                     <h3 style="color: #fff; margin-bottom: 15px;">Brightness</h3>
@@ -149,7 +156,13 @@
         ctx: null,
         cropMode: false,
         cropStart: null,
-        cropEnd: null
+        cropEnd: null,
+        mosaicMode: false,
+        mosaicBoxes: [],
+        mosaicDrawing: false,
+        mosaicStartX: 0,
+        mosaicStartY: 0,
+        mosaicCurrentBox: null
     };
 
     async function openImageEditor(imageId, slug, slotIndex = null) {
@@ -238,6 +251,19 @@
             ctx.fillRect(x - handleSize/2, y + height - handleSize/2, handleSize, handleSize); // Bottom-left
             ctx.fillRect(x + width - handleSize/2, y + height - handleSize/2, handleSize, handleSize); // Bottom-right
         }
+
+        // Draw mosaic boxes — canvas.width == img.naturalWidth so displayScale is 1
+        editorState.mosaicBoxes.forEach(box => {
+            drawMosaicBox(ctx, img, box);
+        });
+
+        // Draw in-progress mosaic box outline
+        if (editorState.mosaicCurrentBox) {
+            const b = editorState.mosaicCurrentBox;
+            ctx.strokeStyle = '#ffff00';
+            ctx.lineWidth = 2;
+            ctx.strokeRect(b.x, b.y, b.width, b.height);
+        }
     }
 
     function getFilterCSS() {
@@ -274,6 +300,40 @@
         return filters.length > 0 ? filters.join(' ') : 'none';
     }
 
+    function drawMosaicBox(ctx, img, box) {
+        const mosaicScale = typeof editorConfig !== 'undefined' ? editorConfig.mosaicScale : 0.05;
+        const tmpCanvas = document.createElement('canvas');
+        const tmpCtx = tmpCanvas.getContext('2d');
+        tmpCanvas.width = box.width;
+        tmpCanvas.height = box.height;
+
+        const sw = Math.max(1, Math.round(box.width * mosaicScale));
+        const sh = Math.max(1, Math.round(box.height * mosaicScale));
+        tmpCtx.drawImage(img, box.x, box.y, box.width, box.height, 0, 0, sw, sh);
+
+        tmpCtx.imageSmoothingEnabled = false;
+        tmpCtx.drawImage(tmpCanvas, 0, 0, sw, sh, 0, 0, box.width, box.height);
+
+        ctx.imageSmoothingEnabled = false;
+        ctx.drawImage(tmpCanvas, 0, 0, box.width, box.height, box.x, box.y, box.width, box.height);
+        ctx.imageSmoothingEnabled = true;
+    }
+
+    function toggleMosaicMode() {
+        editorState.mosaicMode = !editorState.mosaicMode;
+        editorState.cropMode = false;
+
+        const canvas = document.getElementById('editorCanvas');
+        canvas.style.cursor = editorState.mosaicMode ? 'crosshair' : 'default';
+        document.getElementById('mosaicModeBtn').classList.toggle('active', editorState.mosaicMode);
+    }
+
+    function clearMosaicBoxes() {
+        editorState.mosaicBoxes = [];
+        editorState.mosaicCurrentBox = null;
+        renderCanvas();
+    }
+
     function setFilter(filter) {
         editorState.currentFilter = filter;
 
@@ -306,6 +366,17 @@
     let isDragging = false;
 
     document.getElementById('editorCanvas').addEventListener('mousedown', function(e) {
+        if (editorState.mosaicMode) {
+            const rect = this.getBoundingClientRect();
+            const scaleX = editorState.canvas.width / rect.width;
+            const scaleY = editorState.canvas.height / rect.height;
+            editorState.mosaicStartX = (e.clientX - rect.left) * scaleX;
+            editorState.mosaicStartY = (e.clientY - rect.top) * scaleY;
+            editorState.mosaicDrawing = true;
+            editorState.mosaicCurrentBox = null;
+            return;
+        }
+
         if (!editorState.cropMode) return;
 
         const rect = this.getBoundingClientRect();
@@ -321,6 +392,22 @@
     });
 
     document.getElementById('editorCanvas').addEventListener('mousemove', function(e) {
+        if (editorState.mosaicMode && editorState.mosaicDrawing) {
+            const rect = this.getBoundingClientRect();
+            const scaleX = editorState.canvas.width / rect.width;
+            const scaleY = editorState.canvas.height / rect.height;
+            const curX = (e.clientX - rect.left) * scaleX;
+            const curY = (e.clientY - rect.top) * scaleY;
+            editorState.mosaicCurrentBox = {
+                x: Math.round(Math.min(editorState.mosaicStartX, curX)),
+                y: Math.round(Math.min(editorState.mosaicStartY, curY)),
+                width: Math.round(Math.abs(curX - editorState.mosaicStartX)),
+                height: Math.round(Math.abs(curY - editorState.mosaicStartY))
+            };
+            renderCanvas();
+            return;
+        }
+
         if (!editorState.cropMode || !isDragging) return;
 
         const rect = this.getBoundingClientRect();
@@ -358,6 +445,17 @@
     });
 
     document.getElementById('editorCanvas').addEventListener('mouseup', function() {
+        if (editorState.mosaicMode && editorState.mosaicDrawing) {
+            editorState.mosaicDrawing = false;
+            const box = editorState.mosaicCurrentBox;
+            if (box && box.width >= 10 && box.height >= 10) {
+                editorState.mosaicBoxes.push(box);
+            }
+            editorState.mosaicCurrentBox = null;
+            renderCanvas();
+            return;
+        }
+
         if (!editorState.cropMode || !isDragging) return;
 
         isDragging = false;
@@ -406,6 +504,14 @@
         editorState.contrast = 0;
         editorState.currentFilter = 'original';
         editorState.cropData = null;
+        editorState.mosaicMode = false;
+        editorState.mosaicBoxes = [];
+        editorState.mosaicDrawing = false;
+        editorState.mosaicCurrentBox = null;
+        const canvas = document.getElementById('editorCanvas');
+        if (canvas) canvas.style.cursor = 'default';
+        const mosaicBtn = document.getElementById('mosaicModeBtn');
+        if (mosaicBtn) mosaicBtn.classList.remove('active');
 
         document.getElementById('brightnessSlider').value = 0;
         document.getElementById('brightnessValue').textContent = '0';
@@ -434,6 +540,10 @@
 
         if (editorState.cropData) {
             formData.append('crop', JSON.stringify(editorState.cropData));
+        }
+
+        if (editorState.mosaicBoxes.length > 0) {
+            formData.append('mosaic_boxes', JSON.stringify(editorState.mosaicBoxes));
         }
 
         if (editorState.slotIndex !== null) {
@@ -502,6 +612,13 @@
             statusDiv.textContent = 'Error reverting: ' + error.message;
         }
     }
+</script>
+
+<script>
+const editorConfig = {
+    mosaicScale: <?= (int)\App\Models\Setting::get('mosaic_scale', 5) ?> / 100,
+    mosaicWorkingSize: <?= (int)\App\Models\Setting::get('mosaic_working_size', 400) ?>
+};
 </script>
 
 <!-- Gallery Editor Modal -->

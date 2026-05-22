@@ -800,6 +800,26 @@ class AdminController
                 }
             }
 
+            if (!empty($_POST['mosaic_boxes'])) {
+                $decoded = json_decode(stripslashes($_POST['mosaic_boxes']), true);
+                if (is_array($decoded)) {
+                    $mosaicBoxes = [];
+                    foreach ($decoded as $box) {
+                        if (isset($box['x'], $box['y'], $box['width'], $box['height'])) {
+                            $mosaicBoxes[] = [
+                                'x'      => (int)$box['x'],
+                                'y'      => (int)$box['y'],
+                                'width'  => (int)$box['width'],
+                                'height' => (int)$box['height'],
+                            ];
+                        }
+                    }
+                    if (!empty($mosaicBoxes)) {
+                        $edits['mosaic_boxes'] = $mosaicBoxes;
+                    }
+                }
+            }
+
             // Detect gallery format
             $slots = Image::decodeSlots($image['image_data'] ?? '');
             if ($slots !== null) {
@@ -1118,6 +1138,26 @@ class AdminController
             }
 
             Setting::set('max_gallery_images', (string)$maxImages);
+
+            if (isset($_POST['mosaic_scale'])) {
+                $mosaicScale = (int)$_POST['mosaic_scale'];
+                if ($mosaicScale < 1 || $mosaicScale > 50) {
+                    http_response_code(400);
+                    echo json_encode(['success' => false, 'error' => 'Mosaic scale must be between 1 and 50']);
+                    return;
+                }
+                Setting::set('mosaic_scale', (string)$mosaicScale);
+            }
+
+            if (isset($_POST['mosaic_working_size'])) {
+                $workingSize = (int)$_POST['mosaic_working_size'];
+                if ($workingSize < 100 || $workingSize > 2000) {
+                    http_response_code(400);
+                    echo json_encode(['success' => false, 'error' => 'Mosaic working size must be between 100 and 2000']);
+                    return;
+                }
+                Setting::set('mosaic_working_size', (string)$workingSize);
+            }
 
             echo json_encode(['success' => true]);
 

@@ -43,6 +43,13 @@ class ImageEditor
                 self::applyFilter($image, $edits['filter']);
             }
 
+            // Apply mosaic last so pixel data is stable after all other transforms
+            if (!empty($edits['mosaic_boxes']) && is_array($edits['mosaic_boxes'])) {
+                $mosaicScale   = (int)\App\Models\Setting::get('mosaic_scale', 5);
+                $workingSize   = (int)\App\Models\Setting::get('mosaic_working_size', 400);
+                self::applyMosaic($image, $edits['mosaic_boxes'], $mosaicScale, $workingSize);
+            }
+
             // Ensure JPEG format
             $image->setImageFormat('jpeg');
             $image->setImageCompressionQuality(98);
@@ -122,6 +129,47 @@ class ImageEditor
                 // Warm tone
                 $image->colorizeImage('#FFA500', 0.15); // Warm orange tint
                 break;
+        }
+    }
+
+    private static function applyMosaic(\Imagick $image, array $boxes, int $mosaicScale, int $workingSize): void
+    {
+        $scaleFactor = $mosaicScale / 100;
+
+        foreach ($boxes as $box) {
+            $x  = max(0, (int)($box['x'] ?? 0));
+            $y  = max(0, (int)($box['y'] ?? 0));
+            $rw = (int)($box['width'] ?? 0);
+            $rh = (int)($box['height'] ?? 0);
+
+            $imgW = $image->getImageWidth();
+            $imgH = $image->getImageHeight();
+            if ($x + $rw > $imgW) $rw = $imgW - $x;
+            if ($y + $rh > $imgH) $rh = $imgH - $y;
+            if ($rw <= 0 || $rh <= 0) continue;
+
+            $region = clone $image;
+            $region->cropImage($rw, $rh, $x, $y);
+
+            $origRw = $rw;
+            $origRh = $rh;
+
+            if ($rw > $workingSize || $rh > $workingSize) {
+                $region->resizeImage($workingSize, $workingSize, \Imagick::FILTER_TRIANGLE, 1, true);
+                $rw = $region->getImageWidth();
+                $rh = $region->getImageHeight();
+            }
+
+            $region->scaleImage(max(1, (int)round($rw * $scaleFactor)), max(1, (int)round($rh * $scaleFactor)));
+            $region->scaleImage($rw, $rh);
+
+            if ($origRw !== $rw || $origRh !== $rh) {
+                $region->resizeImage($origRw, $origRh, \Imagick::FILTER_POINT, 1);
+            }
+
+            $image->compositeImage($region, \Imagick::COMPOSITE_COPY, $x, $y);
+            $region->clear();
+            $region->destroy();
         }
     }
 
