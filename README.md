@@ -30,7 +30,8 @@ A private, security-focused image hosting service acting as a digital vault for 
 ### Image Editing
 
 - Non-destructive rotation and caption updates via the admin editor
-- Changes applied on top of the original stored BLOB without re-upload
+- **Mosaic/blur tool** - Draw rectangular regions on an image to pixelate specific areas; configurable scale and working-size limits via admin settings
+- Changes always re-applied from the original stored BLOB — revert at any time
 
 ### Share Controls
 
